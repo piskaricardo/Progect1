@@ -1,0 +1,90 @@
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Data;
+using System.Data.OleDb;
+using System.Drawing;
+using System.Globalization;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+
+namespace Test1
+{
+    public partial class Form1 : Form
+    {
+        int idkey;
+        public Form1()
+        {
+            InitializeComponent();
+        }
+
+        private void button1_Click(object sender, EventArgs e)
+        {
+            var result = openFileDialog1.ShowDialog(this);
+
+            if (result == DialogResult.OK)
+            {
+                var fn = openFileDialog1.FileName;
+                textBox1.Text = fn;
+
+                var key = File.ReadAllText(fn);
+
+                this.idkey = int.Parse(key);
+            }
+        }
+
+        private void button2_Click(object sender, EventArgs e)
+        {
+            var builder = new OleDbConnectionStringBuilder();
+
+            builder.DataSource = "Сотрудники.accdb";
+            builder.Provider = "Microsoft.ACE.OLEDB.12.0";
+            var connection = new OleDbConnection(builder.ToString());
+            connection.Open();
+            try
+            {
+                var dataSet = new DataSet();
+                var command = new OleDbCommand("select * from Сотрудники", connection);
+                var adapter = new OleDbDataAdapter(command);
+                adapter.Fill(dataSet);
+                var employeeTable = dataSet.Tables[0];
+                var rows = employeeTable.Select("[Код подписи] = " + this.idkey);
+                if (rows.Length > 0)
+                {
+                    var row = rows[0];
+                    var post = (string)row["Должность"];
+
+                    if (string.Equals(post, "Заместитель директора", StringComparison.CurrentCultureIgnoreCase) 
+                        || string.Equals(post, "директор", StringComparison.CurrentCultureIgnoreCase))
+                    {
+                        var date = DateTime.Now.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
+                        var insertCmdText = $"insert into Договора([Дата подписания],[Код подписи]) values (#{date}#, {this.idkey})";
+                        var insertCommand = new OleDbCommand(insertCmdText, connection);
+                        var count = insertCommand.ExecuteNonQuery();
+                        this.label1.Text = $"Договор подписан. {row[1]} {row[3]} {date}";
+                    }
+                    else
+                    {
+                        this.label1.Text = "Сотрудник не имеет право подписывать договор";
+                    }
+                }
+                else
+                {
+                    this.label1.Text = "Отсутствуют сотрудники с данным ключом";
+                }                
+            }
+            finally
+            {
+                connection.Close();
+            }
+        }
+
+        private void exitButton_MouseClick(object sender, MouseEventArgs e)
+        {
+            this.Close();
+        }
+    }
+}
